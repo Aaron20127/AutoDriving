@@ -38,7 +38,7 @@ def getRelativeAngle(line_orientation, car_orientation):
 
 def test_1():
     set_speed = 11.11  # 40km/s
-    ref_x = 2.1     # 延x轴行走的垂直参考线
+    ref_x = 1.8     # 延x轴行走的垂直参考线
     max_y_val = -2000 # 行驶到y的最大位置
 
     for i in np.linspace(1, 1, num=10):
@@ -61,7 +61,7 @@ def test_1():
             relative_angle = getRelativeAngle(270, car_orientation)
             k_relative_angle = 90
             distance = abs(x_val-ref_x)
-            k_distance = 30.0
+            k_distance = 70.0
 
             para_a = distance/k_distance
             para_b = relative_angle/k_relative_angle
@@ -89,21 +89,6 @@ def test_1():
 
 test_1()
 
-# Go forward + steer right
-# car_controls.throttle = 0.5
-# car_controls.steering = 1
-# client.setCarControls(car_controls)
-# time.sleep(0.5)   # let car drive a bit
-
-# car_controls.throttle = 0
-# car_controls.steering = 0
-# client.setCarControls(car_controls)
-
-
-
-# client.reset()
-
-# client.enableApiControl(False)
 
 
             
