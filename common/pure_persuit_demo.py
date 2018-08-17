@@ -1,28 +1,16 @@
-""" 追踪点轨迹测试，纯最终算法
+""" 追踪点轨迹测试，纯追踪算法
     https://blog.csdn.net/AdamShan/article/details/80555174
 """
-import setup_path
-import airsim
-import common
-
-import json
-import time
-import os
 
 import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-k = 0.25  # 前视距离与车速的系数
+k = 0.05  # 前视距离与车速的系数
 Lfc = 2.0  # 最小前视距离
-L = 2.34  # 车辆轴距，单位：m
-
-# connect to the AirSim simulator 
-client = airsim.CarClient()
-client.confirmConnection()
-client.enableApiControl(True, "Car1")
-car_controls = airsim.CarControls()
-client.reset()
+Kp = 1.0  # 速度P控制器系数
+dt = 0.03  # 时间间隔，单位：s
+L = 2.9  # 车辆轴距，单位：m
 
 class VehicleState:
 
@@ -109,79 +97,39 @@ def calc_target_index(state, cx, cy):
 
     return ind
 
-
-def getCarPosition(car_state):
-    x_val = car_state.kinematics_estimated.position.x_val
-    y_val = car_state.kinematics_estimated.position.y_val
-    z_val = car_state.kinematics_estimated.position.z_val
-    return x_val, y_val, z_val
-
-def getCarOrientation(car_state):
-    """将弧度转换成0-360度，注意原来的弧度是-3.14到3.14，
-       且y坐标的正向朝下，角度正方向为顺时针方向
-       return: 0-360
-    """
-    _, _, arc = airsim.to_eularian_angles(car_state.kinematics_estimated.orientation)
-
-    return arc
-    # if arc < 0:
-    #     arc += 2*math.pi
-    # return arc/(2*math.pi) * 360
-
-def speedControl(speed):
-    """控制车速，速度快了采刹车，速度慢了采油门
-    """
-    car_state = client.getCarState()
-    
-    if (car_state.speed < speed):
-        car_controls.throttle = 1
-    else:
-        car_controls.throttle = 0
-
-    client.setCarControls(car_controls)
-
-def getSimpleCarState():
-    car_state = client.getCarState()
-    x_val, y_val, _ = getCarPosition(car_state)
-    yaw = getCarOrientation(car_state)
-    return VehicleState(x = x_val, y = y_val, yaw = yaw, v=car_state.speed)
-
-def executeCarControls(delta):
-    k = 3
-    car_controls.steering = k * delta
-    client.setCarControls(car_controls)
-
 def main():
-    car_speed = 35 / 3.6  # 40km/s
+    #  设置目标路点
+    cx = np.arange(0, 100, 1)
+    cy = [math.sin(ix / 3.0) * ix / 2.0 for ix in cx]
 
-    # 追踪坐标
-    # cx = np.arange(0, 200, 0.5)
-    # cy = [math.sin(ix / 10.0) * ix / 2.0 for ix in cx]
+    target_speed = 100 / 3.6  # [m/s]
 
-    track = common.read_list_from_file("main/Track.txt")
+    T = 100.0  # 最大模拟时间
 
-    cx = [i[0]/100.0 for i in track]
-    cy = [i[1]/100.0 for i in track]
+    # 设置车辆的初始状态
+    state = VehicleState(x=-5.0, y=5.0, yaw=0.0, v=0.0)
 
-    state = getSimpleCarState()
-
+    lastIndex = len(cx) - 1
+    time = 0.0
     x = [state.x]
     y = [state.y]
-
+    yaw = [state.yaw]
+    v = [state.v]
+    t = [0.0]
     target_ind = calc_target_index(state, cx, cy)
 
-    while True:
-        # 1.控制车速
-        speedControl(car_speed)
+    while T >= time and lastIndex > target_ind:
+        ai = PControl(target_speed, state.v)
+        di, target_ind = pure_pursuit_control(state, cx, cy, target_ind)
+        state = update(state, ai, di)
 
-        # 
-        state = getSimpleCarState()
+        time = time + dt
+
         x.append(state.x)
         y.append(state.y)
-        
-        di, target_ind = pure_pursuit_control(state, cx, cy, target_ind)
-        executeCarControls(di)
-        print (target_ind)
+        yaw.append(state.yaw)
+        v.append(state.v)
+        t.append(time)
 
         plt.cla()
         plt.plot(cx, cy, ".r", label="course")
@@ -191,7 +139,7 @@ def main():
         plt.grid(True)
         plt.title("Speed[km/h]:" + str(state.v * 3.6)[:4])
         plt.pause(0.001)
-
+        # plt.show()
 
 if __name__ == '__main__':
     main()

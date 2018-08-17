@@ -1,5 +1,6 @@
-import setup_path 
+import setup_path
 import airsim
+import common
 
 import json
 import time

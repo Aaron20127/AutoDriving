@@ -140,7 +140,8 @@ def test3():
     cv2.destroyAllWindows()
 
 
-test_2()
+if __name__ == '__main__':
+    test_2()
 
 # project_outpath = 'vedio_out/project_video_out.mp4'
 # project_video_clip = VideoFileClip("project_video.mp4")
