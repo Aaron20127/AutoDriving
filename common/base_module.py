@@ -255,7 +255,8 @@ def getCurvature():
     def second_derivative(x, theta_0):
         """二次函数的二阶导数,theta_0是原二次项系数
         """
-        return (2 * theta_0)
+        base = np.ones([1,x.size])[0]
+        return (base * 2 * theta_0)
 
     r = 10
     # total_deta = math.pi/4
@@ -263,11 +264,11 @@ def getCurvature():
     # x = r * np.cos(deta)
     # y = r * np.sin(deta)
 
-    # x = np.linspace(0,r,10)
-    # y = np.sqrt(r**2-x**2)
+    x = np.linspace(0,r,10)
+    y = np.sqrt(r**2-x**2)
 
-    y = np.linspace(0,r,9)
-    x = list(np.zeros([1,9]))[0]
+    x = np.linspace(0,r,9)
+    y = list(np.zeros([1,9]))[0]
 
     theta = np.polyfit(x, y, 2)
     theta_0 = theta[0]
@@ -295,17 +296,16 @@ def getCurvature():
     plt.show()
 
 
-# getCurvature()
+getCurvature()
 # test()
 
 # x = [-1,-2,0,0]
 # y = [1,2,2,1]
 
 # r = 10
-# total_deta = math.pi/1.5
-# deta = np.linspace(-total_deta, total_deta, 10)
-# x = r * np.cos(deta)
-# y = r * np.sin(deta)
+
+# y = np.linspace(0,r,9)
+# x = list(np.zeros([1,9]))[0]
 
 # x_n, y_n = convertToStandardFunctionPoints(x,y)
 
