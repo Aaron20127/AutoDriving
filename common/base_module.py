@@ -140,23 +140,6 @@ def plot_base(y_coordinate, x_coordinate = [], line_lable = [],
     # plt.savefig("file.png", dpi = 200)  #保存图片，默认png     
     # plt.show()
 
-
-def test():
-    x = np.linspace(-1,1,10)
-    y = np.sqrt(1-x**2)
-
-    #1. 4个系数，最高次数3次，最高次在系数矩阵的第一个
-    z = np.polyfit(x, y, 2)
-    p3 = np.poly1d(z)
-
-    #2. 30个系数，最高次数29次
-    p30 = np.poly1d(np.polyfit(x, y, 30))
-
-    xp = np.linspace(-2, 2, 100)
-    _ = plt.plot(x, y, 'X', xp, p3(xp), '-', xp, p30(xp), '--')
-    plt.ylim(-2,2)
-    plt.show()
-
 def isOrdered(list):
     """判断元素是否有序
     """
@@ -244,70 +227,115 @@ def convertToStandardFunctionPoints(x_list, y_list):
 
     return x, y
 
-def getCurvature():
-    """曲率半径R = (1 + y1**2)**1.5 / y2
+def getCurvature(x_list, y_list):
+    """计算一系列坐标点的曲率半径和曲率
+       1.曲率半径R = (1 + y1**2)**1.5 / y2
+       2.曲率curvature = 1.0/R
     """
-    def first_derivative(x, theta_0, theta_1):
-        """二次函数的一阶导数,theta_0是原二次项系数，theta_1是原一次项系数
-        """
-        return (2 * theta_0 * x + theta_1)
+    # 1.坐标变换
+    x, y = convertToStandardFunctionPoints(x_list, y_list)
 
-    def second_derivative(x, theta_0):
-        """二次函数的二阶导数,theta_0是原二次项系数
-        """
-        base = np.ones([1,x.size])[0]
-        return (base * 2 * theta_0)
-
-    r = 10
-    # total_deta = math.pi/4
-    # deta = np.linspace(-total_deta, total_deta, 10)
-    # x = r * np.cos(deta)
-    # y = r * np.sin(deta)
-
-    x = np.linspace(0,r,10)
-    y = np.sqrt(r**2-x**2)
-
-    x = np.linspace(0,r,9)
-    y = list(np.zeros([1,9]))[0]
-
+    # 2.获取二次拟合系数，theta_0是二次项系数，theta_1是一次项系数，theta_0是二次项系数
     theta = np.polyfit(x, y, 2)
     theta_0 = theta[0]
     theta_1 = theta[1]
-    theta_2 = theta[2]
+    # theta_2 = theta[2]
 
+    # 3.计算x的中点
+    K = 3.2 # 调节x范围的系数
+    num = 10 # 选择的坐标数量
     x_average = (x[0]+x[-1])/2
-    dx = (x[-1]-x[0])/3.4
-    x_average = np.linspace(x_average-dx, x_average+dx, 10)
+    dx = (x[-1]-x[0])/K
+    x_new = np.linspace(x_average-dx, x_average+dx, num)
 
-    y1 = first_derivative(x_average, theta_0, theta_1)
-    y2 = second_derivative(x_average, theta_0)
+    # 4.计算曲率半径和曲率
+    y1 = 2 * theta_0 * x_new + theta_1 # 一阶导数
+    y2 = 2 * theta_0  # 二阶导数
 
-    R = (1 + y1**2)**1.5 / np.absolute(y2)
-    R_mean = np.mean(R)
+    R = (1 + y1**2)**1.5 / np.absolute(y2) # 计算曲率半径
+    R_mean = np.mean(R) # 求曲率半径平均值
 
-    curvature = 1.0/R_mean
+    # 返回曲率
+    return 1.0/R_mean
 
-    p2 = np.poly1d(theta)
-    xp = np.linspace(-r, r, 100)
-    _ = plt.plot(x, y, 'X', xp, p2(xp), '-')
-    plt.title("R = " + str(R_mean))
-    plt.xlim(-r,r)
-    plt.ylim(-r,r)
+def getCurvatureArray(x, y, loop=False, num=3):
+    """
+    计算一连串坐标轨迹点的曲率，返回所有点的曲率数组，实验后貌似3个点效果最好
+    Parameters
+        loop: 这个轨迹是否形成一个环形，如果是环形，则首尾的点连在一起计算曲率
+        num:  每次计算曲率拟合的点的个数，必须是奇数，比如每次使用5个点，取中点第三个点的曲率。
+                那么能计算曲率的点应该是第3到倒数第3个，前边和后边各有两个点不能计算曲率。
+                由于曲线连续，所以将前第1,2个点的曲率设成第3个点的曲率，最后两个点的曲率
+                设成倒数第三个点的曲率。
+        x: x点坐标集合，一维数组，np.array类型
+        y: y点坐标集合，一维数组，np.array类型
+    Returns
+        curvature: 曲率集合，一维数组，np.array类型
+    """
+    # 1.判断拟合点是否大于坐标总数, 判断拟合点数是否大于等于3，判断拟合点是否是奇数
+    length = len(x)
+    if length < num:
+        print ("error：总的坐标点数小于每次拟合点数！")
+        sys.exit()
+    
+    if num < 3:
+        print ("error：每次的拟合点数必须大于等于3！")
+        sys.exit()
+
+    if num % 2 == 0:
+        print ("error：拟每次拟合的坐标点数量必须是奇数！")
+        sys.exit()
+
+    # 2.根据是否是封闭的环，做不同的处理
+    x_n = list(x) # 转换成list
+    y_n = list(y)
+    extra_length = int((num-1)/2) #要拟合完所有点，前后应该再增加几个点
+    curvature = [] # 输出的曲率集合
+
+    if loop:
+        # 在前后加上相邻的点，使所有点都能拟合
+        x_n = x_n[length - extra_length: ] + x_n + x_n[ :extra_length]
+        y_n = y_n[length - extra_length: ] + y_n + y_n[ :extra_length]
+
+        for i in range(length):
+            curvature.append(getCurvature(x_n[i:(i+num)], y_n[i:(i+num)]))
+    else:
+        # 先计算能拟合的点，在将不能拟合的点的值设成离他最近的值
+        for i in range(length-(num-1)):
+            curvature.append(getCurvature(x_n[i:(i+num)], y_n[i:(i+num)]))
+
+        head = [curvature[0] for i in range(extra_length)] # 前边应该加几个点
+        rear = [curvature[-1] for i in range(extra_length)]
+        curvature = head + curvature + rear # 全部点相加
+
+    return np.array(curvature)
+
+
+
+if __name__ == '__main__':
+    def test(x,y,num,k):
+        """每次拟合num个点，为了方便显示使用k将曲率调整大一点
+        """
+        curvature = getCurvatureArray(x, y, num=num)
+        print(curvature)
+        print(1.0/curvature)
+        plt.figure()
+        _ = plt.plot(range(len(x)), y, 'X', np.arange(0, len(curvature), 1), k*curvature, 'o')
+        plt.title("num = %d " % (num))
+
+    ## 圆形测试曲率
+    # r = 10
+    # total_deta = math.pi
+    # deta = np.linspace(-total_deta, total_deta, 10, endpoint=False)
+    # x = r * np.cos(deta)
+    # y = r * np.sin(deta)
+
+    ## 正弦函数测试曲率
+    x = np.linspace(0,100,500)
+    y = [math.sin(ix / 3.0) * ix / 2.0 for ix in x]
+
+    test(x,y,3,20) # 每次拟合3个点的曲率
+    test(x,y,5,20) # 每次拟合5个点
+    test(x,y,7,20) # 每次拟合7个点
+
     plt.show()
-
-
-getCurvature()
-# test()
-
-# x = [-1,-2,0,0]
-# y = [1,2,2,1]
-
-# r = 10
-
-# y = np.linspace(0,r,9)
-# x = list(np.zeros([1,9]))[0]
-
-# x_n, y_n = convertToStandardFunctionPoints(x,y)
-
-# _ = plt.plot(x, y, '-', x_n, y_n, '-')
-# plt.show()

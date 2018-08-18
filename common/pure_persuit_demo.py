@@ -131,10 +131,12 @@ def main():
         v.append(state.v)
         t.append(time)
 
+
         plt.cla()
         plt.plot(cx, cy, ".r", label="course")
         plt.plot(x, y, "-b", label="trajectory")
         plt.plot(cx[target_ind], cy[target_ind], "go", label="target")
+
         plt.axis("equal")
         plt.grid(True)
         plt.title("Speed[km/h]:" + str(state.v * 3.6)[:4])
