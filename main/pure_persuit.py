@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: UTF8 -*-
+
 """ 追踪点轨迹测试，纯最终算法
     https://blog.csdn.net/AdamShan/article/details/80555174
 """
@@ -155,13 +158,13 @@ def main():
     car_speed = 35 / 3.6  # 40km/s
 
     # 追踪坐标
-    # cx = np.arange(0, 200, 0.5)
-    # cy = [math.sin(ix / 10.0) * ix / 2.0 for ix in cx]
+    cx = np.arange(0, 200, 0.5)
+    cy = [math.sin(ix / 10.0) * ix / 2.0 for ix in cx]
 
-    track = common.read_list_from_file("main/Track.txt")
+    # track = common.read_list_from_file("main/Track.txt")
 
-    cx = [i[0]/100.0 for i in track]
-    cy = [i[1]/100.0 for i in track]
+    # cx = [i[0]/100.0 for i in track]
+    # cy = [i[1]/100.0 for i in track]
 
     state = getSimpleCarState()
 
