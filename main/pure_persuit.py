@@ -208,7 +208,7 @@ def isTrackingFailure(center_x, center_y, car_x, car_y, r, error):
     
     return state, dev
 
-def test_main(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
+def test_circle(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
 
     cx = list(cx)
     cy = list(cy)
@@ -258,14 +258,40 @@ def test_main(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
     return (not trac_fail)
 
 def main():
-    target_speed = 12 / 3.6  # 目标速度
-    curv = 0.222             # 曲率
-    r = 1.0 / curv           # 曲率半径
+    # target_speed = 12 / 3.6  # 目标速度
+    # curv = 0.222             # 曲率
+    # r = 1.0 / curv           # 曲率半径
+    # error = 0.3              # 车偏离中线的误差范围
+
+    # cx, cy = generatingTrackCoordinates(curv)
+    # state = test_main(cx, cy, r, 0, r, error, target_speed, loop=3)
+
+    # 测试速度与曲率关系
+    min_c = 0.004
+    max_c = 0.222
+    d_c = 0.001   # 每次曲率增量
+
+    max_v = 100.0
+    min_v = 12.0 
+    d_v = 1.0    # 每次速度增量
+
+
+    c_v = []
+
+    front_v = max_v
     error = 0.3              # 车偏离中线的误差范围
-
-    cx, cy = generatingTrackCoordinates(curv)
-    state = test_main(cx, cy, r, 0, r, error, target_speed, loop=3)
-
+    for curv in np.arange(min_c + d_c, max_c, d_c):
+        r = 1.0 / curv 
+        target_speed = front_v
+        for i in range(int(front_v - min_v)):
+            cx, cy = generatingTrackCoordinates(curv)
+            client.reset()
+            if test_circle(cx, cy, r, 0, r, error, target_speed / 3.6, loop=1):
+                c_v.append([curv,target_speed])
+                front_v = target_speed
+                common.write_list_to_file("c_v.txt", c_v)
+                break
+            target_speed -= d_v
 
 if __name__ == '__main__':
     main()
