@@ -261,6 +261,7 @@ def getCurvature(x_list, y_list):
 def getCurvatureArray(x, y, loop=False, num=3):
     """
     计算一连串坐标轨迹点的曲率，返回所有点的曲率数组，实验后貌似3个点效果最好
+
     Parameters
         loop: 这个轨迹是否形成一个环形，如果是环形，则首尾的点连在一起计算曲率
         num:  每次计算曲率拟合的点的个数，必须是奇数，比如每次使用5个点，取中点第三个点的曲率。
@@ -269,6 +270,7 @@ def getCurvatureArray(x, y, loop=False, num=3):
                 设成倒数第三个点的曲率。
         x: x点坐标集合，一维数组，np.array类型
         y: y点坐标集合，一维数组，np.array类型
+        
     Returns
         curvature: 曲率集合，一维数组，np.array类型
     """
