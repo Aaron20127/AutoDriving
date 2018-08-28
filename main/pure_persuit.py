@@ -19,7 +19,7 @@ import math
 import matplotlib.pyplot as plt
 import copy
 
-k = 0.05  # 前视距离与车速的系数
+k = 0.04  # 前视距离与车速的系数
 Lfc = 2.0  # 最小前视距离
 L = 2.34  # 车辆轴距，单位：m
 
@@ -99,12 +99,13 @@ def calc_target_index(state, cx, cy, curvs):
     L = 0.0
 
     # 根据曲率半径计算当前的前视距离，前视距离越大，跟踪的前方的点越远
+
     if curvs[ind] > 0.01:
       Lf = 0.01 * state.v + 1
         # Lf = 0.0
         # ind += 1
     else:
-      Lf = 0.05 * state.v + Lfc
+      Lf = state.v / 260 * state.v + Lfc
 
     # Lf = 0.05 * state.v + Lfc
 
@@ -176,7 +177,7 @@ def executeCarControls(delta, target_speed, curv):
 
     client.setCarControls(car_controls)
 
-def generatingTrackCoordinates(curv):
+def generatingTrackCoordinates(curv, point_density = 0.5):
     """生成各种类型轨迹坐标
     """
     # 追踪坐标
@@ -190,9 +191,9 @@ def generatingTrackCoordinates(curv):
 
     # 圆形坐标测试
     r = 1.0 / curv
-    num_points = 120
+    num = (2.0 * math.pi * r) // point_density # 根据点的
     total_deta = math.pi
-    deta = np.linspace(-total_deta, total_deta, num_points, endpoint=False)
+    deta = np.linspace(-total_deta, total_deta, num, endpoint=False)
     cx = r * np.cos(deta) + r 
     cy = r * np.sin(deta)
 
@@ -243,55 +244,83 @@ def test_circle(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
         x.append(state.x)
         y.append(state.y)
 
-        plt.cla()
-        plt.plot(cx, cy, ".r", label="course")
-        plt.plot(x, y, "-b", label="trajectory")
-        plt.plot(cx[target_ind], cy[target_ind], "go", label="target")
-        # plt.axis("equal")
-        plt.grid(True)
-        plt.title("speed:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f,bre:%0.3f, ind:%d, loop:%d, dev:%0.2f" %\
+        # plt.cla()
+        # plt.plot(cx, cy, ".r", label="course")
+        # plt.plot(x, y, "-b", label="trajectory")
+        # plt.plot(cx[target_ind], cy[target_ind], "go", label="target")
+        # # plt.axis("equal")
+        # plt.grid(True)
+        # plt.title("speed:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f,bre:%0.3f, ind:%d, loop:%d, dev:%0.2f" %\
+        #          (state.v * 3.6, curvs[target_ind], 
+        #           car_controls.steering, car_controls.throttle,
+        #           car_controls.brake, target_ind, loop, dev))
+        # plt.pause(0.001)
+
+        print("speed:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f" %\
                  (state.v * 3.6, curvs[target_ind], 
                   car_controls.steering, car_controls.throttle,
-                  car_controls.brake, target_ind, loop, dev))
-        plt.pause(0.001)
+                  car_controls.brake, target_ind, len(cx), loop, dev))
 
     return (not trac_fail)
 
-def main():
-    # target_speed = 12 / 3.6  # 目标速度
-    # curv = 0.222             # 曲率
-    # r = 1.0 / curv           # 曲率半径
-    # error = 0.3              # 车偏离中线的误差范围
 
-    # cx, cy = generatingTrackCoordinates(curv)
-    # state = test_main(cx, cy, r, 0, r, error, target_speed, loop=3)
+def getCarSpeedCurveParallelTable(file = 'v_c.txt'):
+    '''测试车速度与曲率关系'''
 
-    # 测试速度与曲率关系
-    min_c = 0.004
-    max_c = 0.222
+    min_c = 0.001
+    max_c = 0.225
     d_c = 0.001   # 每次曲率增量
 
-    max_v = 100.0
+    max_v = 200.0
     min_v = 12.0 
     d_v = 1.0    # 每次速度增量
 
 
-    c_v = []
+    c_v = [] # 对照表
+    front_c = max_c
+    error = 0.4    # 车偏离中线的误差范围
 
-    front_v = max_v
-    error = 0.3              # 车偏离中线的误差范围
-    for curv in np.arange(min_c + d_c, max_c, d_c):
-        r = 1.0 / curv 
-        target_speed = front_v
-        for i in range(int(front_v - min_v)):
+    for v in np.arange(min_v, max_v + d_v, d_v):
+        target_speed = v
+        curv = front_c
+        for c in np.arange(min_c, front_c + d_c, d_c):
+            r = 1.0 / curv
             cx, cy = generatingTrackCoordinates(curv)
+
             client.reset()
+            time.sleep(0.2)
+            client.reset()
+            time.sleep(0.2)
+            client.reset()
+            time.sleep(0.2)
+
             if test_circle(cx, cy, r, 0, r, error, target_speed / 3.6, loop=1):
-                c_v.append([curv,target_speed])
-                front_v = target_speed
-                common.write_list_to_file("c_v.txt", c_v)
+                c_v.append([target_speed, round(curv, 3)])
+                front_c = curv
+                common.write_list_to_file(file, c_v)
                 break
-            target_speed -= d_v
+            curv -= d_c
+
+def getTargetSpeed():
+    '''根据当前的速度和预判点的曲率，得到应有的行驶速度
+    '''
+
+def main():
+
+    # client.reset()
+    # time.sleep(0.2)
+    # client.reset()
+    # time.sleep(0.2)
+
+    # target_speed = 12 / 3.6  # 目标速度
+    # curv = 0.225           # 曲率
+    # r = 1.0 / curv           # 曲率半径
+    # error = 0.4              # 车偏离中线的误差范围
+
+    # cx, cy = generatingTrackCoordinates(curv, point_density=0.5)
+    # state = test_circle(cx, cy, r, 0, r, error, target_speed, loop=3)
+
+    getCarSpeedCurveParallelTable()
 
 if __name__ == '__main__':
     main()
