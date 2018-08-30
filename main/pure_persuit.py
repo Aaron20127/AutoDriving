@@ -18,6 +18,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import copy
+import sys
 
 k = 0.04  # 前视距离与车速的系数
 Lfc = 2.0  # 最小前视距离
@@ -44,9 +45,7 @@ def PControl(target, current):
     """根据当前速度与目标速度的差值，设置一个加速度
     """
     a = Kp * (target - current)
-
     return a
-
 
 def pure_pursuit_control(state, cx, cy, pind, curvs):
     """根据前视距离
@@ -138,7 +137,7 @@ def getCarOrientation(car_state):
     #     arc += 2*math.pi
     # return arc/(2*math.pi) * 360
 
-def getSimpleCarState():
+def updateSimpleCarState():
     car_state = client.getCarState()
     x_val, y_val, _ = getCarPosition(car_state)
     yaw = getCarOrientation(car_state)
@@ -163,35 +162,29 @@ def executeCarControls(delta, target_speed, curv):
     #     if Kp < 1.0:
     #         Kp += 0.001
 
+    d_speed_thr = target_speed - car_state.speed 
+
     if (car_state.speed < target_speed):
-        car_controls.throttle = Kp
+        car_controls.throttle = 1
     else:
         car_controls.throttle = 0
 
     # 3.控制车速，速度快了采刹车
-    d_speed = car_state.speed - target_speed
-    if d_speed > 0:
-        car_controls.brake = 0.15 * d_speed
+    d_speed_bre = car_state.speed - target_speed
+    if d_speed_bre > 0:
+        car_controls.brake = 0.5 * d_speed_bre
     else:
         car_controls.brake = 0
 
     client.setCarControls(car_controls)
 
-def generatingTrackCoordinates(curv, point_density = 0.5):
-    """生成各种类型轨迹坐标
+def generatingCircleTrackCoordinates(curv, point_density = 0.5):
+    """生成圆形坐标
+       curv: 曲率
+       point_density：点密度，表示多少米一个点
     """
-    # 追踪坐标
-    # cx = np.arange(0, 200, 2)
-    # cy = [math.sin((ix+100) / 10.0) * (ix+100) / 2.0  for ix in cx]
-
-    # track = common.read_list_from_file("main/Track.txt")
-
-    # cx = [i[0]/100.0 for i in track]
-    # cy = [i[1]/100.0 for i in track]
-
-    # 圆形坐标测试
     r = 1.0 / curv
-    num = (2.0 * math.pi * r) // point_density # 根据点的
+    num = (2.0 * math.pi * r) // point_density # point_density表示多少米一个点
     total_deta = math.pi
     deta = np.linspace(-total_deta, total_deta, num, endpoint=False)
     cx = r * np.cos(deta) + r 
@@ -199,22 +192,98 @@ def generatingTrackCoordinates(curv, point_density = 0.5):
 
     return cx, cy
 
-def isTrackingFailure(center_x, center_y, car_x, car_y, r, error):
-    """测试车是否偏离轨道，error表示允许的误差范围
-    """
-    state = False
-    dev = abs(math.sqrt((center_x - car_x)**2 + (center_y - car_y)**2) - r)
-    if dev > error:
-        state = True
-    
-    return state, dev
+def generatingOvalTrackCoordinates(min_c, max_c, point_density = 0.5):
+    """生成椭圆坐标轨迹
+       椭圆曲率求解：http://kns.cnki.net/KCMS/detail/detail.aspx?dbcode=CJFQ&dbname=CJFD2013&filename=CFXB201314002&uid=WEEvREdxOWJmbC9oM1NjYkZCbDZZNTBMZWYzOUhpaFRvbXJVOHpIZTBFSFY=$R1yZ0H6jyaa0en3RxVUd8df-oHi7XMMDo7mtKT6mSmEvTuk11l2gFA!!&v=MzA4NTVGWm9SOGVYMUx1eFlTN0RoMVQzcVRyV00xRnJDVVJMS2ZiK1JtRnlEblVyN0tKaXZUYkxHNEg5TE5xNDk=
+       曲率最大位置：c(a,0) = a / b**2 = max_c
+       曲率最小位置：c(0,b) = b / a**2 = min_c
+       联立得长轴和短轴:
+            a = max_c**(-1.0/3) * min_c**(-2.0/3)
+            b = max_c**(-2.0/3) * min_c**(-1.0/3)
 
-def test_circle(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
+       椭圆周长公式：
+            L1 = pi * (a + b)
+            L2 = pi * (a**2 + b**2)**(0.5)
+            L3 = 0.5*L1 + 0.5*L2 （最精确）
+
+       max_c: 椭圆最小曲率，在短轴处
+       max_c: 椭圆最大曲率，在长轴处
+       point_density：点密度，表示多少米一个点
+    """
+    if min_c > max_c:
+        print ("error：短轴曲率应该小于长轴曲率！")
+        sys.exit()
+    if max_c > 0.225:
+        print ("error：超过最大曲率0.225！")
+        sys.exit()
+        
+    # 1.计算长短轴
+    a = max_c**(-1.0/3) * min_c**(-2.0/3) # 长轴
+    b = max_c**(-2.0/3) * min_c**(-1.0/3) # 短轴
+
+    # 2.计算椭圆周长
+    pi = math.pi
+    L1 = pi * (a + b)
+    L2 = pi * (a**2 + b**2)**(0.5)
+    L = 0.5*L1 + 0.5*L2
+
+    # 3.生成坐标点
+    num = L // point_density # point_density表示多少米一个点
+    total_deta = math.pi
+    deta = np.linspace(-total_deta, total_deta, num, endpoint=False)
+    cx = a * np.cos(deta) + a
+    cy = b * np.sin(deta) 
+    # plt.plot(cx, cy, "o", label="course")
+    # plt.title("a=%f, b=%f" % (a, b))
+    # plt.show()
+    return cx, cy, a, b
+
+def getListNearOfLocalIndex(lst, index, num):
+    """得到某个点左右各num个点，加上自身index，共2*num + 1个点
+    """
+    lst_len = len(lst)
+    if (2*num+1 > lst_len):
+        print ("error：获取的列表长度大于原列表长度！")
+        sys.exit()
+    lst_n = [lst[index]]
+    # 1.左半部分
+    if index >= num:
+        lst_n = lst[index - num : index] + lst_n
+    else:
+        lst_n = (lst[index - num :] + lst[: index]) + lst_n      
+    # 2.右半部分
+    if (index + num) < lst_len:
+        lst_n += lst[index+1 : index+1 + num]
+    else:
+        lst_n += (lst[index+1:] + lst[:num - (lst_len - (index+1))])
+    return lst_n
+
+def testCircleRoad(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
+    '''测试圆环道路
+    输入：
+       cx,cy: 车的坐标
+       center_x, center_y: 道路中心坐标
+       r: 圆环道路的半径
+       error: 允许车偏离道路的最大误差
+       target_speed: 目标速度
+       loop: 行驶的圈数
+    返回：
+       是否测试成功
+    '''
+    def isTrackingFailure(center_x, center_y, car_x, car_y, r, error):
+        """测试车是否偏离轨道，error表示允许的误差范围
+        """
+        state = False
+        dev = abs(math.sqrt((center_x - car_x)**2 + (center_y - car_y)**2) - r)
+        if dev > error:
+            state = True
+        
+        return state, dev
 
     cx = list(cx)
     cy = list(cy)
     
-    state = getSimpleCarState()
+    state = updateSimpleCarState()
     curvs = common.getCurvatureArray(cx, cy)
     target_ind = calc_target_index(state, cx, cy, curvs)
     x = [state.x]
@@ -234,7 +303,7 @@ def test_circle(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
             target_ind = 0
 
         # 3.控制车
-        state = getSimpleCarState()
+        state = updateSimpleCarState()
         executeCarControls(delta, target_speed, curvs[target_ind+2])
 
         # 4.判断车是否偏离轨道，车的位置到圆心的距离等于圆弧的半径
@@ -263,29 +332,122 @@ def test_circle(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
 
     return (not trac_fail)
 
+def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1):
+    '''测试圆环道路
+    输入：
+       cx,cy: 车的坐标
+       center_x, center_y: 道路中心坐标
+       a, b: 长轴和短轴
+       error: 允许车偏离道路的最大误差
+       target_speed: 目标速度
+       loop: 行驶的圈数
+    返回：
+       是否测试成功
+    '''
+    def isTrackingFailure(x, y, center_x, center_y, error, a = a, b = b):
+        """ 得到车当前离轨道的误差距离
+        """
+        # 1.车相对于椭圆圆心的坐标向量和初始向量
+        x = x - center_x
+        y = y - center_y
 
-def getCarSpeedCurveParallelTable(file = 'v_c.txt'):
-    '''测试车速度与曲率关系'''
+        # 2.得到向量夹角
+        deta = math.atan2(y, x)
 
-    min_c = 0.001
-    max_c = 0.225
-    d_c = 0.001   # 每次曲率增量
+        # 3.得到误差
+        ox = a * np.cos(deta) 
+        oy = b * np.sin(deta)
+        
+        error_n = abs(common.getVectorDistance(x, y) -\
+                  common.getVectorDistance(ox, oy))
+        if error >= error_n:
+            return False, error_n
+        else:
+            return True, error_n    
+
+    cx = list(cx)
+    cy = list(cy)
+    
+    state = updateSimpleCarState()
+    curvs = common.getCurvatureArray(cx, cy)
+    target_speed_list = \
+        common.getTargetSpeedFromCurvs(curvs, c_v_file = 'main/c_v.txt')
+
+    target_ind = calc_target_index(state, cx, cy, curvs)
+    x = [state.x]
+    y = [state.y]
+
+    trac_fail = False
+
+    while loop > 0 and (not trac_fail):
+        # 1.获取方向盘转角
+        delta, target_ind = pure_pursuit_control(state, cx, cy, target_ind, curvs)
+
+        # 2.将后边的坐标放到坐标列表最前边，使车可以循环行驶
+        if target_ind + 2 > len(curvs) - 1:
+            loop -= 1
+            cx = cx[target_ind-1:len(cx)] + cx[0:target_ind-1]
+            cy = cy[target_ind-1:len(cy)] + cy[0:target_ind-1]
+            target_ind = 0
+
+        # 3.控制车
+        state = updateSimpleCarState()
+        curv = curvs[target_ind+2]
+        target_speed = min(getListNearOfLocalIndex(target_speed_list, target_ind+2, 20)) / 3.6
+        # target_speed = (target_speed_list[target_ind+2]) / 3.6
+        # target_speed = 12 / 3.6
+        executeCarControls(delta, target_speed, curv)
+
+        # 4.判断车是否偏离轨道，车的位置到圆心的距离等于圆弧的半径
+        trac_fail, dev = isTrackingFailure(state.x, state.y, center_x, center_y, error)
+        trac_fail = False
+
+        # 5.打印信息
+        x.append(state.x)
+        y.append(state.y)
+
+        plt.cla()
+        plt.plot(cx, cy, ".r", label="course")
+        plt.plot(x, y, "-b", label="trajectory")
+        plt.plot(cx[target_ind], cy[target_ind], "go", label="target")
+        # plt.axis("equal")
+        plt.grid(True)
+        plt.title("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f" %\
+                 (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
+                  car_controls.steering, car_controls.throttle,
+                  car_controls.brake, target_ind, len(cx), loop, dev))
+        plt.pause(0.001)
+
+        # print("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f" %\
+        #          (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
+        #           car_controls.steering, car_controls.throttle,
+        #           car_controls.brake, target_ind, len(cx), loop, dev))
+
+    return (not trac_fail)
+
+def generateCarSpeedCurveParallelTable(file = 'v_c.txt'):
+    '''测试车速度与曲率关系，产生对应的列表，并保存成文件。
+       默认的速度范围是12.0-200.0km/s，精度0.1;
+       曲率是0.0010-0.2250，精度0.0001。
+    '''
+    min_c = 0.2
+    max_c = 0.2550
+    d_c = 0.0001   # 每次曲率增量
 
     max_v = 200.0
     min_v = 12.0 
-    d_v = 1.0    # 每次速度增量
+    d_v = 0.1     # 每次速度增量
 
-
-    c_v = [] # 对照表
-    front_c = max_c
-    error = 0.4    # 车偏离中线的误差范围
+    c_v = []      # 需要保存的速度曲率对照表
+    front_c = max_c # 保存前一次最大曲率
+    error = 0.35    # 车偏离中线的误差范围
 
     for v in np.arange(min_v, max_v + d_v, d_v):
         target_speed = v
         curv = front_c
         for c in np.arange(min_c, front_c + d_c, d_c):
             r = 1.0 / curv
-            cx, cy = generatingTrackCoordinates(curv)
+            cx, cy = generatingCircleTrackCoordinates(curv)
 
             client.reset()
             time.sleep(0.2)
@@ -294,33 +456,47 @@ def getCarSpeedCurveParallelTable(file = 'v_c.txt'):
             client.reset()
             time.sleep(0.2)
 
-            if test_circle(cx, cy, r, 0, r, error, target_speed / 3.6, loop=1):
-                c_v.append([target_speed, round(curv, 3)])
+            if testCircleRoad(cx, cy, r, 0, r, error, target_speed / 3.6, loop=1):
+                c_v.insert(0, [round(curv, 4), round(target_speed, 1)]) # 按曲率从小到大排序
                 front_c = curv
                 common.write_list_to_file(file, c_v)
                 break
             curv -= d_c
 
-def getTargetSpeed():
-    '''根据当前的速度和预判点的曲率，得到应有的行驶速度
-    '''
-
 def main():
 
+    ## 1.测试圆形中的行驶
     # client.reset()
     # time.sleep(0.2)
     # client.reset()
     # time.sleep(0.2)
 
-    # target_speed = 12 / 3.6  # 目标速度
-    # curv = 0.225           # 曲率
+    # target_speed = 200 / 3.6  # 目标速度
+    # curv = 0.0010           # 曲率
     # r = 1.0 / curv           # 曲率半径
-    # error = 0.4              # 车偏离中线的误差范围
+    # error = 0.35              # 车偏离中线的误差范围
 
     # cx, cy = generatingTrackCoordinates(curv, point_density=0.5)
     # state = test_circle(cx, cy, r, 0, r, error, target_speed, loop=3)
 
-    getCarSpeedCurveParallelTable()
+    ## 2.生成速度和曲率关系
+    # generateCarSpeedCurveParallelTable()
+
+    ## 3.测试椭圆中行驶
+    min_c = 0.0032
+    max_c = 0.2250
+    error = 0.35
+
+    cx, cy, a, b = generatingOvalTrackCoordinates(min_c, max_c)
+
+    print(a, b)
+
+    state = testOvalRoad(cx, cy, a, 0, a, b, error)
+
 
 if __name__ == '__main__':
+    """
+    存在问题：1.油门的控制，如何拟人
+             2.如何制定一个策略使能精确入弯和出弯
+    """
     main()

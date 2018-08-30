@@ -14,6 +14,7 @@ import gzip
 import os.path
 import random
 import copy
+# import base_module as bml
 
 def write_list_to_file(file, list):
     """将一个列表或字典转换成json字符号串存储到文件中"""
@@ -139,6 +140,11 @@ def plot_base(y_coordinate, x_coordinate = [], line_lable = [],
 
     # plt.savefig("file.png", dpi = 200)  #保存图片，默认png     
     # plt.show()
+
+def getVectorDistance(x, y):
+    """得到向量的长度
+    """
+    return math.sqrt(x**2+y**2)
 
 def isOrdered(list):
     """判断元素是否有序
@@ -312,9 +318,25 @@ def getCurvatureArray(x, y, loop=False, num=3):
 
     return np.array(curvature)
 
+def getTargetSpeedFromCurvs(curvs, c_v_file='main/c_v.txt'):
+    """根据坐标点的曲率列表，得到速度列表
+    """
+    # 1.获取曲率速度对照表
+    c_v = read_list_from_file(c_v_file)
+    c_list = np.array([i[0] for i in c_v])
+    v_list = [i[1] for i in c_v]
 
+    # 2.根据曲率列表，得到速度列表
+    speed_list = []
+    for curv in curvs:
+        ind = np.searchsorted(c_list, curv)
+        if ind == len(c_list):
+            ind -= 1
+        speed_list.append(v_list[ind])
 
-if __name__ == '__main__':
+    return speed_list
+
+def testCurvature():
     def test(x,y,num,k):
         """每次拟合num个点，为了方便显示使用k将曲率调整大一点
         """
@@ -341,3 +363,6 @@ if __name__ == '__main__':
     test(x,y,7,20) # 每次拟合7个点
 
     plt.show()
+
+if __name__ == '__main__':
+    testCurvature()
