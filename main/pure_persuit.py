@@ -164,8 +164,8 @@ def executeCarControls(delta, target_speed, curv):
 
     d_speed_thr = target_speed - car_state.speed 
 
-    if (car_state.speed < target_speed):
-        car_controls.throttle = 1
+    if (d_speed_thr > 0):
+        car_controls.throttle = 1.0 * abs(d_speed_thr)
     else:
         car_controls.throttle = 0
 
@@ -238,25 +238,47 @@ def generatingOvalTrackCoordinates(min_c, max_c, point_density = 0.5):
     # plt.show()
     return cx, cy, a, b
 
-def getListNearOfLocalIndex(lst, index, num):
-    """得到某个点左右各num个点，加上自身index，共2*num + 1个点
+def getListNearOfLocalIndex(lst, index, left, right, auto_regulation = True):
+    """找到列表的的index位置的前left和后right个元素，把它们按顺序链接在一起。
+        这个过程把lst看成首位相连的圈
+    参数：
+        lst: 列表
+        index: 从第几个位置开始找
+        left: index前边多少个元素
+        right: index后边多少个元素
+        auto_regulation: 为True，如果lst的元素总数小于left + right + 1个，则返回lst
+    返回：
+        新的list
     """
     lst_len = len(lst)
-    if (2*num+1 > lst_len):
-        print ("error：获取的列表长度大于原列表长度！")
-        sys.exit()
+    if (left + right + 1) > lst_len:
+        if auto_regulation:
+            return lst
+        else:
+            print ("error：获取的列表长度大于原列表长度！")
+            sys.exit()
+
     lst_n = [lst[index]]
-    # 1.左半部分
-    if index >= num:
-        lst_n = lst[index - num : index] + lst_n
+    # 1.获取左半部分
+    if index >= left:
+        lst_n = lst[index - left : index] + lst_n
     else:
-        lst_n = (lst[index - num :] + lst[: index]) + lst_n      
-    # 2.右半部分
-    if (index + num) < lst_len:
-        lst_n += lst[index+1 : index+1 + num]
+        lst_n = (lst[index - left :] + lst[: index]) + lst_n      
+    # 2.获取右半部分
+    if (index + right) < lst_len:
+        lst_n += lst[index+1 : index+1 + right]
     else:
-        lst_n += (lst[index+1:] + lst[:num - (lst_len - (index+1))])
+        lst_n += (lst[index+1:] + lst[:right - (lst_len - (index+1))])
     return lst_n
+
+def getTargetSpeedFromCurrentSpeed(speed_lst, index, cur_speed):
+    """根据当前车速计算前视距离
+    """
+    left = 20 + int(cur_speed * 3.6)
+    right = 20 + int(cur_speed * 3.6)
+    lst_new = getListNearOfLocalIndex(speed_lst, index, left, right)
+    # print (lst_new)
+    return min(lst_new)
 
 def testCircleRoad(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
     '''测试圆环道路
@@ -332,7 +354,7 @@ def testCircleRoad(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
 
     return (not trac_fail)
 
-def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1):
+def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1, file='files/c_v.txt'):
     '''测试圆环道路
     输入：
        cx,cy: 车的坐标
@@ -371,7 +393,7 @@ def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1):
     state = updateSimpleCarState()
     curvs = common.getCurvatureArray(cx, cy)
     target_speed_list = \
-        common.getTargetSpeedFromCurvs(curvs, c_v_file = 'main/c_v.txt')
+        common.getTargetSpeedFromCurvs(curvs, c_v_file = file)
 
     target_ind = calc_target_index(state, cx, cy, curvs)
     x = [state.x]
@@ -393,7 +415,7 @@ def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1):
         # 3.控制车
         state = updateSimpleCarState()
         curv = curvs[target_ind+2]
-        target_speed = min(getListNearOfLocalIndex(target_speed_list, target_ind+2, 20)) / 3.6
+        target_speed = getTargetSpeedFromCurrentSpeed(target_speed_list, target_ind+2, state.v) / 3.6
         # target_speed = (target_speed_list[target_ind+2]) / 3.6
         # target_speed = 12 / 3.6
         executeCarControls(delta, target_speed, curv)
@@ -406,26 +428,26 @@ def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1):
         x.append(state.x)
         y.append(state.y)
 
-        plt.cla()
-        plt.plot(cx, cy, ".r", label="course")
-        plt.plot(x, y, "-b", label="trajectory")
-        plt.plot(cx[target_ind], cy[target_ind], "go", label="target")
-        # plt.axis("equal")
-        plt.grid(True)
-        plt.title("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f" %\
+        # plt.cla()
+        # plt.plot(cx, cy, ".r", label="course")
+        # plt.plot(x, y, "-b", label="trajectory")
+        # plt.plot(cx[target_ind], cy[target_ind], "go", label="target")
+        # # plt.axis("equal")
+        # plt.grid(True)
+        # plt.title("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f, flk:%d" %\
+        #          (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
+        #           car_controls.steering, car_controls.throttle,
+        #           car_controls.brake, target_ind, len(cx), loop, dev, 20 + int(state.v * 3.6)))
+        # plt.pause(0.001)
+
+        print("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f" %\
                  (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
                   car_controls.steering, car_controls.throttle,
                   car_controls.brake, target_ind, len(cx), loop, dev))
-        plt.pause(0.001)
-
-        # print("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f" %\
-        #          (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
-        #           car_controls.steering, car_controls.throttle,
-        #           car_controls.brake, target_ind, len(cx), loop, dev))
 
     return (not trac_fail)
 
-def generateCarSpeedCurveParallelTable(file = 'v_c.txt'):
+def generateCarSpeedCurveParallelTable(file = 'files/c_v.txt'):
     '''测试车速度与曲率关系，产生对应的列表，并保存成文件。
        默认的速度范围是12.0-200.0km/s，精度0.1;
        曲率是0.0010-0.2250，精度0.0001。
@@ -479,13 +501,13 @@ def main():
     # cx, cy = generatingTrackCoordinates(curv, point_density=0.5)
     # state = test_circle(cx, cy, r, 0, r, error, target_speed, loop=3)
 
-    ## 2.生成速度和曲率关系
+    # 2.生成速度和曲率关系
     # generateCarSpeedCurveParallelTable()
 
     ## 3.测试椭圆中行驶
-    min_c = 0.0032
-    max_c = 0.2250
-    error = 0.35
+    min_c = 0.0001 # 椭圆的曲最小曲率
+    max_c = 0.2250 # 椭圆的最大曲率
+    error = 0.35   # 偏离轨道的误差
 
     cx, cy, a, b = generatingOvalTrackCoordinates(min_c, max_c)
 
