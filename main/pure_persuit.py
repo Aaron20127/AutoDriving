@@ -447,7 +447,7 @@ def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1, file='files/c_
 
     return (not trac_fail)
 
-def generateCarSpeedCurveParallelTable(file = 'files/c_v.txt'):
+def generateCarSpeedCurveParallelTable(file = 'files/c_v_new.txt'):
     '''测试车速度与曲率关系，产生对应的列表，并保存成文件。
        默认的速度范围是12.0-200.0km/s，精度0.1;
        曲率是0.0010-0.2250，精度0.0001。
@@ -502,18 +502,18 @@ def main():
     # state = test_circle(cx, cy, r, 0, r, error, target_speed, loop=3)
 
     # 2.生成速度和曲率关系
-    # generateCarSpeedCurveParallelTable()
+    generateCarSpeedCurveParallelTable()
 
-    ## 3.测试椭圆中行驶
-    min_c = 0.0001 # 椭圆的曲最小曲率
-    max_c = 0.2250 # 椭圆的最大曲率
-    error = 0.35   # 偏离轨道的误差
+    # ## 3.测试椭圆中行驶
+    # min_c = 0.0001 # 椭圆的曲最小曲率
+    # max_c = 0.2250 # 椭圆的最大曲率
+    # error = 0.35   # 偏离轨道的误差
 
-    cx, cy, a, b = generatingOvalTrackCoordinates(min_c, max_c)
+    # cx, cy, a, b = generatingOvalTrackCoordinates(min_c, max_c)
 
-    print(a, b)
+    # print(a, b)
 
-    state = testOvalRoad(cx, cy, a, 0, a, b, error)
+    # state = testOvalRoad(cx, cy, a, 0, a, b, error)
 
 
 if __name__ == '__main__':
