@@ -14,7 +14,7 @@ import gzip
 import os.path
 import random
 import copy
-# import base_module as bml
+import multiprocessing
 
 def write_list_to_file(file, list):
     """将一个列表或字典转换成json字符号串存储到文件中"""
@@ -364,5 +364,60 @@ def testCurvature():
 
     plt.show()
 
+
+class NewQueueProcess:
+    "创建一个子进程，该进程能实时运行，并使用注册的函数处理queue中接收到的数据"
+    def __init__(self, fun):
+        self.j_data = {}
+        self.fun = fun
+        self.q = multiprocessing.Queue()
+        self.pro_run = multiprocessing.Process(target=self.run, args=(self.q, self.fun,))
+        self.pro_run.start()
+        # pw.join() # 等待pw结束:
+
+    def run(self, q, fun):
+        """子进程入口函数
+        """
+        while True:
+            val = q.get(True)
+            fun(val)
+
+    def put(self, val):
+        """向子进程传入数据的方法
+        """
+        self.q.put(val)
+
+    def __del__(self):
+        """调用析构函数结束子进程
+        """
+        self.pro_run.terminate()
+
+class NewPipProcess:
+    "创建一个子进程，该进程能实时运行，并使用注册的函数处理queue中接收到的数据"
+    def __init__(self, fun):
+        self.parent_pip, child_pip = multiprocessing.Pipe()
+        self.pro_run = multiprocessing.Process(target=self.run, args=(child_pip, fun,))
+        self.pro_run.start()
+        # pw.join() # 等待pw结束:
+
+    def run(self, pip, fun):
+        """子进程入口函数
+        """
+        while True:
+            # time.sleep(0.1)
+            val = pip.recv()
+            fun(val)
+
+    def put(self, val):
+        """向子进程传入数据的方法
+        """
+        self.parent_pip.send(val)
+
+    def __del__(self):
+        """调用析构函数结束子进程
+        """
+        self.pro_run.terminate()
+
 if __name__ == '__main__':
     testCurvature()
+ 

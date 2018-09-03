@@ -26,6 +26,7 @@ L = 2.34  # 车辆轴距，单位：m
 
 Kp = 1.0 # 油门系数
 
+
 # connect to the AirSim simulator 
 client = airsim.CarClient()
 client.confirmConnection()
@@ -165,7 +166,7 @@ def executeCarControls(delta, target_speed, curv):
     d_speed_thr = target_speed - car_state.speed 
 
     if (d_speed_thr > 0):
-        car_controls.throttle = 1.0 * abs(d_speed_thr)
+        car_controls.throttle = 0.3 + 1.0 * abs(d_speed_thr)
     else:
         car_controls.throttle = 0
 
@@ -280,6 +281,54 @@ def getTargetSpeedFromCurrentSpeed(speed_lst, index, cur_speed):
     # print (lst_new)
     return min(lst_new)
 
+class trajectory:
+    """显示生成的轨迹数据
+    """
+    @staticmethod
+    def json_pack(cx, cy, car_x, car_y, t_x, t_y, title):
+        j_data = {
+            "cx" : cx,
+            "cy" : cy,
+            "car_x" : car_x,
+            "car_y" : car_y,
+            "t_x" : t_x,
+            "t_y" : t_y,
+            "title" : title
+        }
+        return j_data
+
+    @staticmethod
+    def json_parse(j_data):
+        
+        cx = j_data["cx"]
+        cy = j_data["cy"]
+        t_x = j_data["t_x"]
+        t_y = j_data["t_y"]
+        car_x = j_data["car_x"]
+        car_y = j_data["car_y"]
+        title = j_data["title"]
+        return cx, cy, t_x, t_y, car_x, car_y, title
+        
+    @staticmethod
+    def display(j_data):
+        """显示整个道路轨迹和车的运动轨迹
+        输入:
+        j_data:json格式数据
+        """
+        cx, cy, t_x, t_y, car_x, car_y, title = trajectory.json_parse(j_data)
+
+        plt.cla()
+        plt.plot(cx, cy, ".r", label="course")
+        plt.plot(car_x, car_y, "-b", label="trajectory")
+        plt.plot(t_x, t_y, "go", label="target")
+        # plt.axis("equal")
+        plt.grid(True)
+        plt.title(title)
+        plt.pause(0.0001)
+
+        # print(title)
+        # print(car_x, car_y)
+
 def testCircleRoad(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
     '''测试圆环道路
     输入：
@@ -352,6 +401,7 @@ def testCircleRoad(cx, cy, center_x, center_y, r, error, target_speed, loop=3):
                   car_controls.steering, car_controls.throttle,
                   car_controls.brake, target_ind, len(cx), loop, dev))
 
+
     return (not trac_fail)
 
 def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1, file='files/c_v.txt'):
@@ -401,6 +451,10 @@ def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1, file='files/c_
 
     trac_fail = False
 
+    # 另开一个用于图形显示的进程
+    process_display = common.NewPipProcess(trajectory.display)
+    count = 0
+
     while loop > 0 and (not trac_fail):
         # 1.获取方向盘转角
         delta, target_ind = pure_pursuit_control(state, cx, cy, target_ind, curvs)
@@ -425,25 +479,36 @@ def testOvalRoad(cx, cy, center_x, center_y, a, b, error, loop=1, file='files/c_
         trac_fail = False
 
         # 5.打印信息
-        x.append(state.x)
+        x.append(state.x) # 行驶轨迹
         y.append(state.y)
 
-        # plt.cla()
-        # plt.plot(cx, cy, ".r", label="course")
-        # plt.plot(x, y, "-b", label="trajectory")
-        # plt.plot(cx[target_ind], cy[target_ind], "go", label="target")
-        # # plt.axis("equal")
-        # plt.grid(True)
-        # plt.title("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f, flk:%d" %\
+        tar_x = [cx[target_ind]] # 追踪点
+        tar_y = [cy[target_ind]]
+
+        count += 1
+        if count % 5 == 0:
+            process_display.put(trajectory.json_pack(cx, cy, x, y, tar_x, tar_y,
+                    ("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f, flk:%d" %\
+                    (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
+                    car_controls.steering, car_controls.throttle,
+                    car_controls.brake, target_ind, len(cx), loop, dev, 20 + int(state.v * 3.6)))))
+
+            # plt.cla()
+            # plt.plot(cx, cy, ".r", label="course")
+            # plt.plot(x, y, "-b", label="trajectory")
+            # plt.plot(cx[target_ind], cy[target_ind], "go", label="target")
+            # # plt.axis("equal")
+            # plt.grid(True)
+            # plt.title("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f, flk:%d" %\
+            #          (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
+            #           car_controls.steering, car_controls.throttle,
+            #           car_controls.brake, target_ind, len(cx), loop, dev, 20 + int(state.v * 3.6)))
+            # plt.pause(0.001)
+
+        # print("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f" %\
         #          (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
         #           car_controls.steering, car_controls.throttle,
-        #           car_controls.brake, target_ind, len(cx), loop, dev, 20 + int(state.v * 3.6)))
-        # plt.pause(0.001)
-
-        print("sp:%0.2f, tsp:%0.2f, curv:%0.5f, ste:%0.3f, thr:%0.3f, bre:%0.3f, ind:%d/%d, loop:%d, dev:%0.2f" %\
-                 (state.v * 3.6, target_speed * 3.6, curvs[target_ind], 
-                  car_controls.steering, car_controls.throttle,
-                  car_controls.brake, target_ind, len(cx), loop, dev))
+        #           car_controls.brake, target_ind, len(cx), loop, dev))
 
     return (not trac_fail)
 
@@ -502,18 +567,18 @@ def main():
     # state = test_circle(cx, cy, r, 0, r, error, target_speed, loop=3)
 
     # 2.生成速度和曲率关系
-    generateCarSpeedCurveParallelTable()
+    # generateCarSpeedCurveParallelTable()
 
-    # ## 3.测试椭圆中行驶
-    # min_c = 0.0001 # 椭圆的曲最小曲率
-    # max_c = 0.2250 # 椭圆的最大曲率
-    # error = 0.35   # 偏离轨道的误差
+    ## 3.测试椭圆中行驶
+    min_c = 0.0001 # 椭圆的曲最小曲率
+    max_c = 0.2250 # 椭圆的最大曲率
+    error = 0.35   # 偏离轨道的误差
 
-    # cx, cy, a, b = generatingOvalTrackCoordinates(min_c, max_c)
+    cx, cy, a, b = generatingOvalTrackCoordinates(min_c, max_c)
 
-    # print(a, b)
+    print(a, b)
 
-    # state = testOvalRoad(cx, cy, a, 0, a, b, error)
+    state = testOvalRoad(cx, cy, a, 0, a, b, error)
 
 
 if __name__ == '__main__':
