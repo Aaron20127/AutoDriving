@@ -3,7 +3,5 @@ This code is designed for autonomous driving simulation platform to control the 
 
 # Link
 [Airsim website](https://github.com/microsoft/AirSim)
-
 [How to install and use airsim](https://zhuanlan.zhihu.com/p/43245459)
-
 [Pure tracking algorithm paper](https://www.ri.cmu.edu/pub_files/2009/2/Automatic_Steering_Methods_for_Autonomous_Automobile_Path_Tracking.pdf)
